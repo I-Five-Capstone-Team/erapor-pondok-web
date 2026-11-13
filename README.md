@@ -116,8 +116,8 @@ erapor-pondok-web/
 3. **Konfigurasi Environment Variables:**
    Salin berkas `.env.example` menjadi `.env.local` dan isi kredensial Supabase Anda:
    ```env
-   VITE_SUPABASE_URL=https://your-project-id.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-anon-key-here
+   VITE_SUPABASE_URL=https://yusbdpfvzruevocvpuvj.supabase.co
+   VITE_SUPABASE_ANON_KEY=sb_publishable_Vl0wFHCMbOMxhKKs9jMNwA_O2uagN2-
    ```
 
 4. **Jalankan server pengembangan lokal:**
