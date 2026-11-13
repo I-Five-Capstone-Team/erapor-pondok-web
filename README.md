@@ -124,8 +124,8 @@ erapor-pondok-web/
    ```bash
    npm run dev
    ```
-   Buka peramban di `http://localhost:5173` (atau port yang tertera di terminal).
-
+   Buka peramban di ` http://localhost:5173/` (atau port yang tertera di terminal).
+   Buka di mibile network 'http://10.227.189.166:5173/'
 ---
 
 ## 📌 Tautan Penting Proyek
