@@ -162,6 +162,7 @@ pemuatan data rapor belum diintegrasikan.
 
 ## 📌 Tautan Penting Proyek
 
+* 🌐 **Live Demo (Pilot Staging Vercel):** [https://eraporpondok.vercel.app/](https://eraporpondok.vercel.app/)
 * 📁 **Google Drive Proyek:** [https://s.id/N94uN](https://s.id/N94uN)
 * 📋 **Trello Board (Manajemen Sprint):** [[CAPSTONE] E-Rapor Ponpes Nurul Huda | I-Five](https://trello.com/b/P7ODCbOb)
 
