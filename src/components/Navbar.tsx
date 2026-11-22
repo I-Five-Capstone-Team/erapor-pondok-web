@@ -1,32 +1,15 @@
 type NavbarProps = {
   title: string;
-  onMenuClick: () => void;
+  onLogout: () => void;
 };
 
-export default function Navbar({ title, onMenuClick }: NavbarProps) {
+export default function Navbar({ title, onLogout }: NavbarProps) {
   return (
-    <header className="navbar">
-      <div className="navbar-left">
-        <button
-          type="button"
-          className="menu-button"
-          aria-label="Buka menu navigasi"
-          onClick={onMenuClick}
-        >
-          <span className="menu-icon" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </span>
-        </button>
-        <h1 className="navbar-title">{title}</h1>
-      </div>
-      <div className="navbar-right">
-        <div className="profile" aria-label="Profil pengguna">
-          <span className="profile-avatar">U</span>
-          <span className="profile-name">Pengguna</span>
-        </div>
-      </div>
+    <header className="role-topbar">
+      <h1 className="role-topbar-title">{title}</h1>
+      <button type="button" className="role-topbar-logout" onClick={onLogout}>
+        Keluar
+      </button>
     </header>
   );
 }

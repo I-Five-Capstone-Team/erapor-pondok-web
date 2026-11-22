@@ -144,6 +144,20 @@ erapor-pondok-web/
    npm test
    ```
 
+### Login dan hak akses awal
+
+Login menggunakan email dan password akun Supabase Auth. Setelah berhasil masuk,
+aplikasi membaca role dari `public.user_roles` melalui relasi ke
+`public.roles.nama_role`. Pastikan setiap pengguna memiliki role yang sesuai dan
+kebijakan RLS mengizinkan pengguna membaca penugasan role miliknya. Role yang
+didukung saat ini adalah Admin Pondok, Panitia Rapor, Guru Mata Pelajaran,
+PJ Syafahi, Wali Kelas, dan Mudir Idaroh.
+
+Pembatasan halaman di frontend mengatur navigasi, bukan pengganti keamanan data.
+Terapkan kebijakan RLS yang membatasi akses data untuk setiap role di database.
+Halaman UI portal verifikasi tersedia di `/verify/:hash`. Pemeriksaan hash dan
+pemuatan data rapor belum diintegrasikan.
+
 ---
 
 ## 📌 Tautan Penting Proyek
