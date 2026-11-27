@@ -1,6 +1,13 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { guruPenugasanService } from "../../services/guruPenugasanService";
 import { masterDataService } from "../../services/masterDataService";
-import type { CreateMapelInput, MataPelajaran } from "../../types/master-data";
+import type { PenugasanGuruDetail } from "../../types/guru-penugasan";
+import type {
+  CreateMapelInput,
+  KelasWithWali,
+  MataPelajaran,
+  Semester,
+} from "../../types/master-data";
 
 const emptyDraft: CreateMapelInput = {
   kode: "",
@@ -16,10 +23,15 @@ const emptyDraft: CreateMapelInput = {
 
 export default function AdminMapelPanel() {
   const [subjects, setSubjects] = useState<MataPelajaran[]>([]);
+  const [classes, setClasses] = useState<KelasWithWali[]>([]);
+  const [activeSemester, setActiveSemester] = useState<Semester | null>(null);
+  const [selectedClassId, setSelectedClassId] = useState("");
+  const [classAssignments, setClassAssignments] = useState<PenugasanGuruDetail[]>([]);
   const [draft, setDraft] = useState<CreateMapelInput>(emptyDraft);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [mappingLoading, setMappingLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -28,8 +40,16 @@ export default function AdminMapelPanel() {
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    masterDataService.getMataPelajaran(false).then((data) => {
-      if (mounted) setSubjects(data);
+    setErrorMessage(null);
+    Promise.all([
+      masterDataService.getMataPelajaran(false),
+      masterDataService.getKelas(),
+      masterDataService.getActiveSemester(),
+    ]).then(([subjectData, classData, semesterData]) => {
+      if (!mounted) return;
+      setSubjects(subjectData);
+      setClasses(classData);
+      setActiveSemester(semesterData);
     }).catch((error: unknown) => {
       console.error("Gagal memuat mata pelajaran:", error);
       if (mounted) setErrorMessage("Master mata pelajaran tidak dapat dimuat.");
@@ -38,6 +58,53 @@ export default function AdminMapelPanel() {
     });
     return () => { mounted = false; };
   }, [reloadKey]);
+
+  const activeSemesterId = activeSemester?.id ?? null;
+
+  useEffect(() => {
+    if (!selectedClassId || !activeSemesterId) {
+      setClassAssignments([]);
+      setMappingLoading(false);
+      return;
+    }
+    let mounted = true;
+    setClassAssignments([]);
+    setMappingLoading(true);
+    guruPenugasanService.getPenugasanBySemester(activeSemesterId, {
+      kelasId: Number(selectedClassId),
+    }).then((data) => {
+      if (mounted) setClassAssignments(data);
+    }).catch((error: unknown) => {
+      console.error("Gagal memuat pemetaan mapel kelas:", error);
+      if (mounted) setErrorMessage("Pemetaan mata pelajaran kelas tidak dapat dimuat.");
+    }).finally(() => {
+      if (mounted) setMappingLoading(false);
+    });
+    return () => { mounted = false; };
+  }, [selectedClassId, activeSemesterId, reloadKey]);
+
+  const selectedClass = useMemo(
+    () => classes.find((kelas) => String(kelas.id) === selectedClassId) ?? null,
+    [classes, selectedClassId]
+  );
+
+  const teacherNamesByMapel = useMemo(() => {
+    const map = new Map<number, string[]>();
+    for (const assignment of classAssignments) {
+      const names = map.get(assignment.mapel_id) ?? [];
+      const name = assignment.guru?.nama_lengkap;
+      if (name && !names.includes(name)) names.push(name);
+      map.set(assignment.mapel_id, names);
+    }
+    return map;
+  }, [classAssignments]);
+
+  const visibleSubjects = useMemo(() => {
+    if (!selectedClassId) return subjects;
+    return subjects.filter((subject) => teacherNamesByMapel.has(subject.id));
+  }, [subjects, selectedClassId, teacherNamesByMapel]);
+
+  const columnCount = selectedClassId ? 7 : 6;
 
   const startEdit = (subject: MataPelajaran) => {
     setEditingId(subject.id);
@@ -91,7 +158,15 @@ export default function AdminMapelPanel() {
   return (
     <section className="admin-panel">
       <div className="admin-panel-heading">
-        <div><h3>Master Mata Pelajaran</h3><p>{subjects.length} mata pelajaran terdaftar.</p></div>
+        <div>
+          <h3>Master Mata Pelajaran</h3>
+          <p>
+            {subjects.length} mata pelajaran terdaftar.
+            {selectedClass && (mappingLoading
+              ? " Memuat pemetaan kelas..."
+              : ` Menampilkan ${visibleSubjects.length} mapel untuk kelas ${selectedClass.nama_kelas}.`)}
+          </p>
+        </div>
         <button type="button" className="btn-primary" onClick={() => { setEditingId(null); setDraft(emptyDraft); setFormOpen(true); setErrorMessage(null); setNotice(null); }}>Tambah Mapel</button>
       </div>
       {errorMessage && <p className="admin-feedback error" role="alert">{errorMessage}</p>}
@@ -116,20 +191,60 @@ export default function AdminMapelPanel() {
         </form>
       )}
 
+      <div className="admin-filters">
+        <label>
+          <span>Filter kelas</span>
+          <select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)}>
+            <option value="">Semua kelas</option>
+            {classes.map((kelas) => <option key={kelas.id} value={kelas.id}>{kelas.nama_kelas}</option>)}
+          </select>
+        </label>
+      </div>
+      {selectedClassId && (
+        <p className="admin-hint">
+          {activeSemester
+            ? `Pemetaan mengikuti semester aktif: ${activeSemester.semester ?? "-"} · ${activeSemester.tahun_ajaran}. Hanya mapel yang memiliki penugasan di kelas ini yang ditampilkan.`
+            : "Belum ada semester aktif. Pemetaan kelas tidak dapat ditampilkan."}
+        </p>
+      )}
+
       <div className="admin-table-wrap">
         <table className="admin-table">
-          <thead><tr><th>Kode</th><th>Nama</th><th>Kategori</th><th>Lisan</th><th>Status</th><th>Aksi</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Kode</th>
+              <th>Nama</th>
+              <th>Kategori</th>
+              {selectedClassId && <th>Guru Pengampu</th>}
+              <th>Lisan</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
           <tbody>
-            {subjects.map((subject) => (
+            {!mappingLoading && visibleSubjects.map((subject) => (
               <tr key={subject.id}>
-                <td>{subject.kode}</td><td>{subject.nama_latin}</td><td>{subject.kategori ?? "-"}</td>
+                <td>{subject.kode}</td>
+                <td>{subject.nama_latin}</td>
+                <td>{subject.kategori ?? "-"}</td>
+                {selectedClassId && <td>{teacherNamesByMapel.get(subject.id)?.join(", ") || "-"}</td>}
                 <td>{subject.ada_ujian_lisan ? `${subject.bobot_lisan ?? 0}%` : "Tidak"}</td>
                 <td>{subject.is_active === false ? "Nonaktif" : "Aktif"}</td>
-                <td><button type="button" className="btn-secondary btn-sm" onClick={() => startEdit(subject)}>Ubah</button></td>
+                <td><button type="button" className="btn-secondary btn-sm" onClick={() => startEdit(subject)} disabled={loading}>Ubah</button></td>
               </tr>
             ))}
-            {!loading && subjects.length === 0 && <tr><td colSpan={6}>Belum ada mata pelajaran.</td></tr>}
-            {loading && <tr><td colSpan={6}>Memuat data...</td></tr>}
+            {!loading && !mappingLoading && visibleSubjects.length === 0 && (
+              <tr>
+                <td colSpan={columnCount}>
+                  {selectedClassId
+                    ? (activeSemester
+                      ? "Belum ada penugasan mata pelajaran untuk kelas ini pada semester aktif."
+                      : "Belum ada semester aktif.")
+                    : "Belum ada mata pelajaran."}
+                </td>
+              </tr>
+            )}
+            {(loading || mappingLoading) && <tr><td colSpan={columnCount}>Memuat data...</td></tr>}
           </tbody>
         </table>
       </div>

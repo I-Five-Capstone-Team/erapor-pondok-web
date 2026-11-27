@@ -51,13 +51,63 @@ export const guruPenugasanService = {
     return (data as GuruProfile[]) ?? [];
   },
 
-  async getAllUserRoles(): Promise<UserRole[]> {
-    const { data, error } = await supabase
-      .from('user_roles')
-      .select('user_id,role_id,roles!user_roles_role_id_fkey(id,nama_role)');
+  async getGuruProfilesPage(params: {
+    page?: number;
+    limit?: number;
+  } = {}): Promise<{ data: GuruProfile[]; count: number }> {
+    const { page = 1, limit = 25 } = params;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    const { data, error, count } = await supabase
+      .from('guru_profiles')
+      .select('id,nip,nama_lengkap,no_hp,nama_arab', { count: 'exact' })
+      .order('nama_lengkap', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to);
 
     if (error) throw error;
-    return (data as unknown as UserRole[]) ?? [];
+    return { data: (data as GuruProfile[]) ?? [], count: count ?? 0 };
+  },
+
+  async getAllGuruIds(): Promise<string[]> {
+    const pageSize = 1000;
+    const ids: string[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('guru_profiles')
+        .select('id')
+        .order('id', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) throw error;
+      const rows = (data as { id: string }[] | null) ?? [];
+      if (rows.length === 0) break;
+      ids.push(...rows.map((row) => row.id));
+      from += rows.length;
+    }
+    return ids;
+  },
+
+  async getAllUserRoles(): Promise<UserRole[]> {
+    const pageSize = 1000;
+    const rows: UserRole[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('user_id,role_id,roles!user_roles_role_id_fkey(id,nama_role)')
+        .order('user_id', { ascending: true })
+        .order('role_id', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) throw error;
+      const page = (data as unknown as UserRole[] | null) ?? [];
+      if (page.length === 0) break;
+      rows.push(...page);
+      from += page.length;
+    }
+    return rows;
   },
 
   async updateGuruProfile(
@@ -130,6 +180,36 @@ export const guruPenugasanService = {
     const { data, error } = await query;
     if (error) throw error;
     return (data as unknown as PenugasanGuruDetail[]) ?? [];
+  },
+
+  async getPenugasanBySemesterPage(
+    semesterId: number,
+    params: { page?: number; limit?: number; kelasId?: number } = {}
+  ): Promise<{ data: PenugasanGuruDetail[]; count: number }> {
+    const { page = 1, limit = 25, kelasId } = params;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    let query = supabase
+      .from('penugasan_guru')
+      .select(`
+        *,
+        guru:guru_profiles!penugasan_guru_guru_id_fkey ( id, nama_lengkap, nama_arab, nip ),
+        mata_pelajaran:mata_pelajaran!penugasan_guru_mapel_id_fkey ( id, kode, nama_latin, nama_arab, kategori, ada_ujian_lisan, bobot_lisan ),
+        kelas:kelas!penugasan_guru_kelas_id_fkey ( id, nama_kelas, nama_kelas_arab, jenjang )
+      `, { count: 'exact' })
+      .eq('semester_id', semesterId)
+      .order('kelas_id', { ascending: true })
+      .order('mapel_id', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to);
+
+    if (kelasId) {
+      query = query.eq('kelas_id', kelasId);
+    }
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+    return { data: (data as unknown as PenugasanGuruDetail[]) ?? [], count: count ?? 0 };
   },
 
   async createPenugasan(payload: Omit<PenugasanGuru, 'id'>): Promise<PenugasanGuru> {
@@ -224,7 +304,7 @@ export const guruPenugasanService = {
           nama_arab,
           jk,
           is_active,
-          kelas:kelas_id ( id, nama_kelas )
+          kelas:kelas_id ( id, nama_kelas, jenjang )
         )
       `)
       .eq('ruangan_id', ruanganId)

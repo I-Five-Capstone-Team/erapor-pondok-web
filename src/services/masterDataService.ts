@@ -150,6 +150,26 @@ export const masterDataService = {
     return data ?? [];
   },
 
+  async getMataPelajaranLisan(): Promise<MataPelajaran[]> {
+    const { data, error } = await supabase
+      .from('mata_pelajaran')
+      .select('*')
+      .eq('ada_ujian_lisan', true)
+      .eq('is_active', true)
+      .order('kode', { ascending: true });
+
+    if (error) throw error;
+    return (data ?? []).sort((a, b) => {
+      const aIsSyafahi = a.kode.toUpperCase().startsWith('SY-');
+      const bIsSyafahi = b.kode.toUpperCase().startsWith('SY-');
+      if (aIsSyafahi !== bIsSyafahi) return aIsSyafahi ? -1 : 1;
+      return a.kode.localeCompare(b.kode, 'id', {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
+  },
+
   async createMataPelajaran(payload: CreateMapelInput): Promise<MataPelajaran> {
     const { data, error } = await supabase
       .from('mata_pelajaran')

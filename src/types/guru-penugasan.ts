@@ -80,6 +80,7 @@ export interface AlokasiSantriDetail extends AlokasiSantriSyafahi {
     kelas?: {
       id: number;
       nama_kelas: string;
+      jenjang?: string | null;
     } | null;
   } | null;
 }

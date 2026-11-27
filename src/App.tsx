@@ -1,13 +1,17 @@
 import type { ReactElement } from "react";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./lib/auth";
 import { getHomePathForRoles, hasRole, type AppRole } from "./lib/roles";
 import AdminPage from "./pages/AdminPage";
+import GuruTahririPage from "./pages/GuruTahririPage";
 import LoginPage from "./pages/LoginPage";
+import PJSyafahiPage from "./pages/PJSyafahiPage";
 import PublicVerifyPage from "./pages/PublicVerifyPage";
 import RoleDashboardPage from "./pages/RoleDashboardPage";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
+
+const PanitiaRaporPage = lazy(() => import("./pages/PanitiaRaporPage"));
 
 function LoadingPage() {
   return (
@@ -97,7 +101,17 @@ const roleRoutes: { role: AppRole; path: string }[] = [
 ];
 
 function RolePage({ role }: { role: AppRole }) {
-  return role === "admin" ? <AdminPage /> : <RoleDashboardPage role={role} />;
+  if (role === "admin") return <AdminPage />;
+  if (role === "panitia_rapor") {
+    return (
+      <Suspense fallback={<LoadingPage />}>
+        <PanitiaRaporPage />
+      </Suspense>
+    );
+  }
+  if (role === "guru_mapel") return <GuruTahririPage />;
+  if (role === "pj_syafahi") return <PJSyafahiPage />;
+  return <RoleDashboardPage role={role} />;
 }
 
 function App() {

@@ -4,6 +4,8 @@ import { masterDataService } from "../../services/masterDataService";
 import type { GuruProfile, PenugasanGuruDetail } from "../../types/guru-penugasan";
 import type { Kelas, MataPelajaran, Semester } from "../../types/master-data";
 
+const PAGE_SIZE = 2;
+
 type AssignmentDraft = {
   guru_id: string;
   mapel_id: string;
@@ -19,6 +21,9 @@ export default function AdminPenugasanPanel() {
   const [subjects, setSubjects] = useState<MataPelajaran[]>([]);
   const [teachers, setTeachers] = useState<GuruProfile[]>([]);
   const [assignments, setAssignments] = useState<PenugasanGuruDetail[]>([]);
+  const [classFilter, setClassFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [count, setCount] = useState(0);
   const [draft, setDraft] = useState<AssignmentDraft>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,9 +36,13 @@ export default function AdminPenugasanPanel() {
     [semesters]
   );
 
+  const selectedClass = useMemo(
+    () => classes.find((kelas) => String(kelas.id) === classFilter) ?? null,
+    [classes, classFilter]
+  );
+
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
     Promise.all([
       masterDataService.getSemesters(),
       masterDataService.getKelas(),
@@ -51,8 +60,6 @@ export default function AdminPenugasanPanel() {
     }).catch((error: unknown) => {
       console.error("Gagal memuat data penugasan:", error);
       if (mounted) setErrorMessage("Data semester, kelas, mapel, atau guru tidak dapat dimuat.");
-    }).finally(() => {
-      if (mounted) setLoading(false);
     });
     return () => { mounted = false; };
   }, [reloadKey]);
@@ -60,19 +67,31 @@ export default function AdminPenugasanPanel() {
   useEffect(() => {
     if (!semesterId) {
       setAssignments([]);
+      setCount(0);
+      setLoading(false);
       return;
     }
     let mounted = true;
     setLoading(true);
-    guruPenugasanService.getPenugasanBySemester(Number(semesterId))
-      .then((data) => { if (mounted) setAssignments(data); })
-      .catch((error: unknown) => {
-        console.error("Gagal memuat daftar penugasan guru:", error);
-        if (mounted) setErrorMessage("Daftar penugasan guru tidak dapat dimuat.");
-      })
-      .finally(() => { if (mounted) setLoading(false); });
+    setErrorMessage(null);
+    guruPenugasanService.getPenugasanBySemesterPage(Number(semesterId), {
+      page,
+      limit: PAGE_SIZE,
+      kelasId: classFilter ? Number(classFilter) : undefined,
+    }).then((result) => {
+      if (!mounted) return;
+      setAssignments(result.data);
+      setCount(result.count);
+      const totalPages = Math.max(1, Math.ceil(result.count / PAGE_SIZE));
+      if (page > totalPages) setPage(totalPages);
+    }).catch((error: unknown) => {
+      console.error("Gagal memuat daftar penugasan guru:", error);
+      if (mounted) setErrorMessage("Daftar penugasan guru tidak dapat dimuat.");
+    }).finally(() => {
+      if (mounted) setLoading(false);
+    });
     return () => { mounted = false; };
-  }, [semesterId, reloadKey]);
+  }, [semesterId, classFilter, page, reloadKey]);
 
   const handleCreate = async (event: FormEvent) => {
     event.preventDefault();
@@ -126,29 +145,54 @@ export default function AdminPenugasanPanel() {
 
       <form className="card admin-form-grid" onSubmit={handleCreate}>
         <h4>Tambah Penugasan</h4>
-        <label><span>Semester *</span><select required value={semesterId} onChange={(e) => setSemesterId(e.target.value)}><option value="">Pilih semester</option>{semesters.map((semester) => <option key={semester.id} value={semester.id}>{semester.tahun_ajaran} · {semester.semester ?? "-"}</option>)}</select></label>
+        <label><span>Semester *</span><select required value={semesterId} onChange={(e) => { setSemesterId(e.target.value); setPage(1); }}><option value="">Pilih semester</option>{semesters.map((semester) => <option key={semester.id} value={semester.id}>{semester.tahun_ajaran} · {semester.semester ?? "-"}</option>)}</select></label>
         <label><span>Guru *</span><select required value={draft.guru_id} onChange={(e) => setDraft({ ...draft, guru_id: e.target.value })}><option value="">Pilih guru</option>{teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.nama_lengkap}</option>)}</select></label>
         <label><span>Mata Pelajaran *</span><select required value={draft.mapel_id} onChange={(e) => setDraft({ ...draft, mapel_id: e.target.value })}><option value="">Pilih mapel</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.kode} · {subject.nama_latin}</option>)}</select></label>
         <label><span>Kelas *</span><select required value={draft.kelas_id} onChange={(e) => setDraft({ ...draft, kelas_id: e.target.value })}><option value="">Pilih kelas</option>{classes.map((kelas) => <option key={kelas.id} value={kelas.id}>{kelas.nama_kelas}</option>)}</select></label>
         <div className="admin-form-actions"><button type="submit" className="btn-primary" disabled={saving || !semesterId}>{saving ? "Menyimpan..." : "Simpan Penugasan"}</button></div>
       </form>
 
+      <div className="admin-filters">
+        <label>
+          <span>Filter kelas</span>
+          <select value={classFilter} onChange={(e) => { setClassFilter(e.target.value); setPage(1); }}>
+            <option value="">Semua kelas</option>
+            {classes.map((kelas) => <option key={kelas.id} value={kelas.id}>{kelas.nama_kelas}</option>)}
+          </select>
+        </label>
+      </div>
+      {!loading && (
+        <p className="admin-hint">
+          {count} penugasan ditemukan{selectedClass ? ` untuk kelas ${selectedClass.nama_kelas}` : ""}.
+        </p>
+      )}
+
       <div className="admin-table-wrap">
         <table className="admin-table">
-          <thead><tr><th>Guru</th><th>Mata Pelajaran</th><th>Kelas</th><th>Aksi</th></tr></thead>
+          <thead><tr><th>Guru</th><th>Mata Pelajaran</th><th>Kategori</th><th>Kelas</th><th>Aksi</th></tr></thead>
           <tbody>
             {assignments.map((assignment) => (
               <tr key={assignment.id}>
                 <td>{assignment.guru?.nama_lengkap ?? "-"}</td>
                 <td>{assignment.mata_pelajaran?.kode ?? "-"} · {assignment.mata_pelajaran?.nama_latin ?? "-"}</td>
+                <td>{assignment.mata_pelajaran?.kategori ?? "-"}</td>
                 <td>{assignment.kelas?.nama_kelas ?? "-"}</td>
-                <td><button type="button" className="btn-secondary btn-sm" onClick={() => handleDelete(assignment.id)} disabled={saving}>Hapus</button></td>
+                <td><button type="button" className="btn-secondary btn-sm" onClick={() => handleDelete(assignment.id)} disabled={saving || loading}>Hapus</button></td>
               </tr>
             ))}
-            {!loading && assignments.length === 0 && <tr><td colSpan={4}>Belum ada penugasan pada semester ini.</td></tr>}
-            {loading && <tr><td colSpan={4}>Memuat data...</td></tr>}
+            {!loading && assignments.length === 0 && (
+              <tr><td colSpan={5}>{selectedClass ? `Belum ada penugasan untuk kelas ${selectedClass.nama_kelas} pada semester ini.` : "Belum ada penugasan pada semester ini."}</td></tr>
+            )}
+            {loading && <tr><td colSpan={5}>Memuat data...</td></tr>}
           </tbody>
         </table>
+      </div>
+      <div className="admin-pagination">
+        <span>Halaman {page} dari {Math.max(1, Math.ceil(count / PAGE_SIZE))} · {count} penugasan</span>
+        <div>
+          <button type="button" className="btn-secondary btn-sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || loading}>Sebelumnya</button>
+          <button type="button" className="btn-secondary btn-sm" onClick={() => setPage((current) => current + 1)} disabled={loading || page >= Math.ceil(count / PAGE_SIZE)}>Berikutnya</button>
+        </div>
       </div>
     </section>
   );
